@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/SanjaySinghRajpoot/YTapi/config"
 )
@@ -148,6 +150,39 @@ func main() {
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
+	}
+
+	// videos := youtubeAPI.Data
+
+	// Begin transaction
+	tx, err := config.DB.Begin()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Prepare the bulk insert statement
+	stmt, err := tx.Prepare(`
+	 INSERT INTO videos (video_title, description, publish_time, thumbnail_url, channel, created_at)
+	 VALUES ($1, $2, $3, $4, $5, $6)
+    `)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, obj := range youtubeAPI.Data["Video List"] {
+
+		fmt.Println(obj)
+
+		_, err = stmt.Exec(obj.Title, obj.Description, obj.PublishTime, obj.Image, obj.Channel, time.Now())
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	jsonData, err := json.Marshal(youtubeAPI)
