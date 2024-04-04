@@ -2,11 +2,9 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/SanjaySinghRajpoot/YTapi/config"
@@ -15,6 +13,8 @@ import (
 )
 
 func insertVideosToDatabase(db *sql.DB, videos []models.VideoInfo) error {
+
+	// Bulk Insert Operation
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("error beginning transaction: %v", err)
@@ -23,7 +23,7 @@ func insertVideosToDatabase(db *sql.DB, videos []models.VideoInfo) error {
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO videos (video_title, description, publish_time, thumbnail_url, channel, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (video_title, created_at) DO NOTHING;
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`)
 	if err != nil {
 		return fmt.Errorf("error preparing statement: %v", err)
@@ -45,54 +45,6 @@ func insertVideosToDatabase(db *sql.DB, videos []models.VideoInfo) error {
 	fmt.Println("Data inserted into database successfully.")
 	return nil
 }
-
-// get endpoint
-// Handler function for the API endpoint
-func getVideosHandler(w http.ResponseWriter, r *http.Request) {
-	page, err := strconv.Atoi(r.URL.Query().Get("page"))
-	if err != nil || page < 1 {
-		page = 1
-	}
-
-	limit := 10 // Change the limit according to your requirement
-
-	offset := (page - 1) * limit
-
-	rows, err := config.DB.Query("SELECT id, video_title, description, publish_time, thumbnail_url, channel, created_at FROM videos ORDER BY publish_time DESC LIMIT $1 OFFSET $2", limit, offset)
-	if err != nil {
-		http.Error(w, "Failed to fetch videos", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	videos := make([]models.Video, 0)
-	for rows.Next() {
-		var v models.Video
-		err := rows.Scan(&v.ID, &v.VideoTitle, &v.Description, &v.PublishTime, &v.ThumbnailURL, &v.Channel, &v.CreatedAt)
-		if err != nil {
-			http.Error(w, "Failed to scan video row", http.StatusInternalServerError)
-			return
-		}
-		videos = append(videos, v)
-	}
-
-	if err := rows.Err(); err != nil {
-		http.Error(w, "Error in fetching videos", http.StatusInternalServerError)
-		return
-	}
-
-	jsonData, err := json.Marshal(videos)
-	if err != nil {
-		http.Error(w, "Failed to marshal JSON", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonData)
-}
-
-// lets code a cron job which will run for 10 secs get the data and save it in the DB
 
 func main() {
 
@@ -183,6 +135,6 @@ func main() {
 		}
 	}()
 
-	http.HandleFunc("/videos", getVideosHandler)
+	http.HandleFunc("/videos", controller.GetVideosHandler)
 	http.ListenAndServe(":8080", nil)
 }
