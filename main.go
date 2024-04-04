@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,79 +10,39 @@ import (
 	"time"
 
 	"github.com/SanjaySinghRajpoot/YTapi/config"
+	"github.com/SanjaySinghRajpoot/YTapi/controller"
+	"github.com/SanjaySinghRajpoot/YTapi/models"
 )
 
-type YouTubeAPI struct {
-	Query         string
-	APIKey        string
-	NextPageToken string
-	Data          map[string][]VideoInfo
-	Count         int
-}
-
-type VideoInfo struct {
-	Index       int
-	Title       string
-	Description string
-	PublishTime string
-	Channel     string
-	Image       string
-}
-
-// Video represents the structure of a video
-type Video struct {
-	ID           int    `json:"id"`
-	VideoTitle   string `json:"video_title"`
-	Description  string `json:"description"`
-	PublishTime  string `json:"publish_time"`
-	ThumbnailURL string `json:"thumbnail_url"`
-	Channel      string `json:"channel"`
-	CreatedAt    string `json:"created_at"`
-}
-
-func (y *YouTubeAPI) getLoadingStats() error {
-	url := fmt.Sprintf("https://www.googleapis.com/youtube/v3/search?part=snippet&q=%s&maxResults=100&type=video&eventType=completed&order=date&key=%s", y.Query, y.APIKey)
-
-	response, err := http.Get(url)
+func insertVideosToDatabase(db *sql.DB, videos []models.VideoInfo) error {
+	tx, err := db.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("error beginning transaction: %v", err)
 	}
-	defer response.Body.Close()
+	defer tx.Rollback()
 
-	var data map[string]interface{}
-	err = json.NewDecoder(response.Body).Decode(&data)
+	stmt, err := tx.Prepare(`
+		INSERT INTO videos (video_title, description, publish_time, thumbnail_url, channel, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (video_title, created_at) DO NOTHING;
+	`)
 	if err != nil {
-		return err
+		return fmt.Errorf("error preparing statement: %v", err)
 	}
+	defer stmt.Close()
 
-	if nextPageToken, ok := data["nextPageToken"].(string); ok {
-		y.NextPageToken = nextPageToken
-	}
-
-	if items, ok := data["items"].([]interface{}); ok {
-		for _, item := range items {
-			if itemMap, ok := item.(map[string]interface{}); ok {
-				snippet := itemMap["snippet"].(map[string]interface{})
-				videoTitle := snippet["title"].(string)
-				image := snippet["thumbnails"].(map[string]interface{})["high"].(map[string]interface{})["url"].(string)
-				publishTime := snippet["publishedAt"].(string)
-				channel := snippet["channelTitle"].(string)
-				description := snippet["description"].(string)
-
-				y.Data["Video List"] = append(y.Data["Video List"], VideoInfo{
-					Index:       y.Count,
-					Title:       videoTitle,
-					Description: description,
-					PublishTime: publishTime,
-					Channel:     channel,
-					Image:       image,
-				})
-
-				y.Count++
-			}
+	for _, video := range videos {
+		_, err := stmt.Exec(video.Title, video.Description, video.PublishTime, video.Image, video.Channel, time.Now())
+		if err != nil {
+			return fmt.Errorf("error inserting video into database: %v", err)
 		}
 	}
 
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("error committing transaction: %v", err)
+	}
+
+	fmt.Println("Data inserted into database successfully.")
 	return nil
 }
 
@@ -104,9 +65,9 @@ func getVideosHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	videos := make([]Video, 0)
+	videos := make([]models.Video, 0)
 	for rows.Next() {
-		var v Video
+		var v models.Video
 		err := rows.Scan(&v.ID, &v.VideoTitle, &v.Description, &v.PublishTime, &v.ThumbnailURL, &v.Channel, &v.CreatedAt)
 		if err != nil {
 			http.Error(w, "Failed to scan video row", http.StatusInternalServerError)
@@ -138,60 +99,89 @@ func main() {
 	// connect to DB
 	config.ConnectDB()
 
-	youtubeAPI := YouTubeAPI{
+	youtubeAPI := models.YouTubeAPI{
 		Query:         "mrbeast",
 		APIKey:        "AIzaSyBPaQHapf1F_NDU_Y73tKPrE457Gb-gKjM",
-		Data:          make(map[string][]VideoInfo),
+		Data:          make(map[string][]models.VideoInfo),
 		Count:         0,
 		NextPageToken: "",
 	}
 
-	err := youtubeAPI.getLoadingStats()
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
+	// err := youtubeAPI.getLoadingStats()
+	// if err != nil {
+	// 	fmt.Println("Error:", err)
+	// 	return
+	// }
 
-	// videos := youtubeAPI.Data
+	// // videos := youtubeAPI.Data
 
-	// Begin transaction
-	tx, err := config.DB.Begin()
-	if err != nil {
-		log.Fatal(err)
-	}
+	// // Begin transaction
+	// tx, err := config.DB.Begin()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	// Prepare the bulk insert statement
-	stmt, err := tx.Prepare(`
-	 INSERT INTO videos (video_title, description, publish_time, thumbnail_url, channel, created_at)
-	 VALUES ($1, $2, $3, $4, $5, $6)
-    `)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// // Prepare the bulk insert statement
+	// stmt, err := tx.Prepare(`
+	//  INSERT INTO videos (video_title, description, publish_time, thumbnail_url, channel, created_at)
+	//  VALUES ($1, $2, $3, $4, $5, $6)
+	// `)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	for _, obj := range youtubeAPI.Data["Video List"] {
+	// for _, obj := range youtubeAPI.Data["Video List"] {
 
-		fmt.Println(obj)
+	// 	fmt.Println(obj)
 
-		_, err = stmt.Exec(obj.Title, obj.Description, obj.PublishTime, obj.Image, obj.Channel, time.Now())
-		if err != nil {
-			log.Fatal(err)
+	// 	_, err = stmt.Exec(obj.Title, obj.Description, obj.PublishTime, obj.Image, obj.Channel, time.Now())
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }
+
+	// // Commit the transaction
+	// err = tx.Commit()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// jsonData, err := json.Marshal(youtubeAPI)
+	// if err != nil {
+	// 	fmt.Println("Error marshalling JSON:", err)
+	// 	return
+	// }
+
+	// fmt.Println(string(jsonData))
+
+	// Creating sync channels and routines
+	concurrencyLimit := 5
+	resultChan := make(chan int, concurrencyLimit)
+
+	// Start a Goroutine to continuously fetch data
+	ticker := time.Tick(time.Minute)
+	go func() {
+		for range ticker {
+			select {
+			case resultChan <- 0:
+				// Channel is available, proceed to fetch data
+				vidInfo, err := controller.GetLoadingStats(youtubeAPI)
+				if err != nil {
+					fmt.Println("Error:", err)
+					return
+				}
+
+				// Insert fetched videos into the database
+				err = insertVideosToDatabase(config.DB, vidInfo)
+				if err != nil {
+					log.Println(err)
+				}
+			default:
+				// Channel is full, skip this fetch iteration
+				fmt.Println("Skipping data fetch as the channel is full")
+			}
 		}
-	}
-
-	// Commit the transaction
-	err = tx.Commit()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	jsonData, err := json.Marshal(youtubeAPI)
-	if err != nil {
-		fmt.Println("Error marshalling JSON:", err)
-		return
-	}
-
-	fmt.Println(string(jsonData))
+	}()
 
 	http.HandleFunc("/videos", getVideosHandler)
 	http.ListenAndServe(":8080", nil)
