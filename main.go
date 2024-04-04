@@ -21,13 +21,9 @@ func main() {
 	var keys []string
 
 	//  -> /REMOVE erase this from the string
-	// key1 := "AIzaSyDK3D7jgGxwEeGsWzWgMtgu3eLZPM5OeFA/REMOVE"
-	// key2 := "AIzaSyD1N1nQECXYAxmdwcRFV0tqkAa2zLkBFCQ/REMOVE"
-	// key3 := "AIzaSyBPaQHapf1F_NDU_Y73tKPrE457Gb-gKjM/REMOVE"
-
-	key1 := "AIzaSyDK3D7jgGxwEeGsWzWgMtgu3eLZPM5OeFA"
-	key2 := "AIzaSyD1N1nQECXYAxmdwcRFV0tqkAa2zLkBFCQ"
-	key3 := "AIzaSyBPaQHapf1F_NDU_Y73tKPrE457Gb-gKjM"
+	key1 := "AIzaSyDK3D7jgGxwEeGsWzWgMtgu3eLZPM5OeFA/REMOVE"
+	key2 := "AIzaSyD1N1nQECXYAxmdwcRFV0tqkAa2zLkBFCQ/REMOVE"
+	key3 := "AIzaSyBPaQHapf1F_NDU_Y73tKPrE457Gb-gKjM/REMOVE"
 
 	keys = append(keys, key1, key2, key3)
 
