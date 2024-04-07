@@ -27,7 +27,7 @@ cd YTapi
 
    - Open `main.go` file.
    - Replace the placeholder API keys in the `keys` array with your actual YouTube API keys.
-   - A few keyys are already added remove this string "/REMOVE" from last to get it working. 
+   - A few keyys are already added remove this string "/REMOVE" from last to get the API keys working. 
 
 3. Start the PostgreSQL database:
 
